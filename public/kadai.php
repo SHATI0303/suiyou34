@@ -57,9 +57,34 @@ if (isset($_POST['delete_id']) && isset($_POST['delete_password_check'])) {
     return;
 }
 
-// 投稿データの取得
-$select_sth = $dbh->prepare('SELECT * FROM bbs_entries ORDER BY created_at DESC');
+// ページネーション設定
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 10;
+$offset = ($page - 1) * $limit;
+
+// 投稿データの取得 (ページネーション適用)
+$select_sth = $dbh->prepare("SELECT * FROM bbs_entries ORDER BY created_at DESC LIMIT :limit OFFSET :offset");
+$select_sth->bindValue(':limit', $limit, PDO::PARAM_INT);
+$select_sth->bindValue(':offset', $offset, PDO::PARAM_INT);
 $select_sth->execute();
+
+// 総投稿数を取得
+$total_count_sth = $dbh->prepare("SELECT COUNT(*) FROM bbs_entries");
+$total_count_sth->execute();
+$total_count = $total_count_sth->fetchColumn();
+$total_pages = ceil($total_count / $limit);
+
+// 投稿IDとページ番号の対応表を作成
+// ページをまたぐレスアンカーのために必要
+$all_ids_sth = $dbh->prepare("SELECT id FROM bbs_entries ORDER BY created_at DESC");
+$all_ids_sth->execute();
+$all_ids = $all_ids_sth->fetchAll(PDO::FETCH_COLUMN);
+
+$id_to_page = [];
+foreach ($all_ids as $index => $id) {
+    $page_number = floor($index / $limit) + 1;
+    $id_to_page[$id] = $page_number;
+}
 ?>
 
 <!DOCTYPE html>
@@ -157,16 +182,24 @@ $select_sth->execute();
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
-        .entry-id {
-            position: absolute;
-            top: 1em;
-            right: 1.5em;
-            font-size: 1.2em;
-            color: #999;
-            font-weight: bold;
-            cursor: pointer;
+        .entry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
+        .entry-id {
+            font-size: 1.2em;
+            color: #007bff;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .entry-id:hover {
+            text-decoration: underline;
+        }
+
         .entry-body-content {
             margin-top: 1em;
         }
@@ -179,6 +212,7 @@ $select_sth->execute();
         .res-link:hover {
             text-decoration: underline;
         }
+
         .entry-footer {
             margin-top: 1em;
             display: flex;
@@ -207,6 +241,33 @@ $select_sth->execute();
         .delete-btn:hover {
             background-color: #c82333;
         }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 2em;
+            margin-bottom: 2em;
+        }
+
+        .pagination a, .pagination span {
+            padding: 0.5em 1em;
+            margin: 0 0.2em;
+            border: 1px solid #ccc;
+            text-decoration: none;
+            color: #007bff;
+            border-radius: 4px;
+        }
+
+        .pagination a:hover {
+            background-color: #e9ecef;
+        }
+
+        .pagination .current-page {
+            background-color: #007bff;
+            color: #fff;
+            border-color: #007bff;
+        }
     </style>
 </head>
 <body>
@@ -222,18 +283,37 @@ $select_sth->execute();
 
 <hr>
 
+<div class="pagination">
+    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+        <?php if ($i == $page): ?>
+            <span class="current-page"><?= $i ?></span>
+        <?php else: ?>
+            <a href="?page=<?= $i ?>"><?= $i ?></a>
+        <?php endif; ?>
+    <?php endfor; ?>
+</div>
+
 <?php foreach($select_sth as $entry): ?>
   <dl class="entry" id="entry-<?= htmlspecialchars($entry['id']) ?>">
-    <dt>ID</dt>
-    <dd><?= htmlspecialchars($entry['id']) ?></dd>
-    <div class="entry-id" data-id="<?= htmlspecialchars($entry['id']) ?>">No.<?= htmlspecialchars($entry['id']) ?></div>
+    <div class="entry-header">
+        <div class="entry-id" data-id="<?= htmlspecialchars($entry['id']) ?>">No.<?= htmlspecialchars($entry['id']) ?></div>
+    </div>
     <dt>日時</dt>
     <dd><?= htmlspecialchars($entry['created_at']) ?></dd>
     <dt>内容</dt>
     <dd class="entry-body-content">
       <?php
       $escaped_body = htmlspecialchars($entry['body']);
-      $linked_body = preg_replace('/&gt;&gt;(\d+)/', '<a href="#entry-$1" class="res-link">>>$1</a>', $escaped_body);
+      // ページをまたぐレスアンカーを実装するために、preg_replace_callbackを使用
+      $linked_body = preg_replace_callback('/&gt;&gt;(\d+)/', function($matches) use ($id_to_page) {
+          $target_id = $matches[1];
+          $target_page = isset($id_to_page[$target_id]) ? $id_to_page[$target_id] : null;
+          if ($target_page) {
+              return '<a href="?page=' . $target_page . '#entry-' . $target_id . '" class="res-link">>>' . $target_id . '</a>';
+          } else {
+              return '>>' . $target_id; // 該当IDがない場合はリンクにしない
+          }
+      }, $escaped_body);
       echo nl2br($linked_body);
       ?>
       <?php if(!empty($entry['image_filename'])): ?>
@@ -329,9 +409,9 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
   }
 });
 
-// レスアンカー機能のスクリプト
-document.querySelectorAll('.entry-id').forEach(item => {
-    item.addEventListener('click', event => {
+// レスアンカー機能のスクリプトとスクロール機能
+document.querySelectorAll('.entry-id').forEach(button => {
+    button.addEventListener('click', event => {
         const entryId = event.target.dataset.id;
         const textarea = document.getElementById('bodyTextarea');
         
@@ -341,8 +421,11 @@ document.querySelectorAll('.entry-id').forEach(item => {
         
         textarea.value = currentValue.slice(0, currentPos) + textToInsert + currentValue.slice(currentPos);
         
-        const newCursorPos = currentPos + textToInsert.length;
+        const formElement = document.getElementById('uploadForm');
+        formElement.scrollIntoView({ behavior: 'smooth' });
+
         textarea.focus();
+        const newCursorPos = currentPos + textToInsert.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
     });
 });
