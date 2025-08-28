@@ -2,6 +2,9 @@
 // データベース接続
 $dbh = new PDO('mysql:host=mysql;dbname=example_db', 'root', '');
 
+// アラートメッセージ用の変数を初期化
+$alert_message = null;
+
 // 新規投稿処理
 if (isset($_POST['body'])) {
     // 削除パスワードが空の場合はnullをセット
@@ -12,7 +15,6 @@ if (isset($_POST['body'])) {
         // アップロードされたファイルが画像であることを確認
         $mime_type = mime_content_type($_FILES['image']['tmp_name']);
         if (preg_match('/^image\//', $mime_type) !== 1) {
-            header("HTTP/1.1 302 Found");
             header("Location: ./kadai.php");
             return;
         }
@@ -34,7 +36,6 @@ if (isset($_POST['body'])) {
     ]);
 
     // 処理後にリダイレクト
-    header("HTTP/1.1 302 Found");
     header("Location: ./kadai.php");
     return;
 }
@@ -46,15 +47,23 @@ if (isset($_POST['delete_id']) && isset($_POST['delete_password_check'])) {
     $entry = $select_sth->fetch();
 
     if ($entry && password_verify($_POST['delete_password_check'], $entry['delete_password'])) {
+        // 削除成功時にIDをdeleted_entriesテーブルに記録
+        $delete_id = $_POST['delete_id'];
+        $insert_deleted_sth = $dbh->prepare("INSERT INTO deleted_entries (id, deleted_at) VALUES (:id, NOW())");
+        $insert_deleted_sth->execute([':id' => $delete_id]);
+
         $delete_sth = $dbh->prepare("DELETE FROM bbs_entries WHERE id = :id");
-        $delete_sth->execute([':id' => $_POST['delete_id']]);
+        $delete_sth->execute([':id' => $delete_id]);
     } else {
-        echo "<script>alert('パスワードが違います。');</script>";
+        // パスワードが間違っていた場合、アラートメッセージを設定
+        $alert_message = 'パスワードが違います。';
     }
 
-    header("HTTP/1.1 302 Found");
-    header("Location: ./kadai.php");
-    return;
+    // リダイレクトはアラートメッセージがなければ実行
+    if ($alert_message === null) {
+        header("Location: ./kadai.php");
+        return;
+    }
 }
 
 // ページネーション設定
@@ -272,6 +281,12 @@ foreach ($all_ids as $index => $id) {
 </head>
 <body>
 
+<?php if ($alert_message): ?>
+<script>
+    alert('<?= htmlspecialchars($alert_message) ?>');
+</script>
+<?php endif; ?>
+
 <form method="POST" action="./kadai.php" enctype="multipart/form-data" id="uploadForm">
   <textarea name="body" required placeholder="ここに本文を入力してください" id="bodyTextarea"></textarea>
   <div style="margin: 1em 0;">
@@ -432,6 +447,4 @@ document.querySelectorAll('.entry-id').forEach(button => {
 </script>
 </body>
 </html>
-
-
 
