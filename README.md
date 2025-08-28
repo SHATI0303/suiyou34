@@ -618,10 +618,3 @@ document.querySelectorAll('.entry-id').forEach(button => {
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
