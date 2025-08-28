@@ -10,7 +10,7 @@ XSSおよびSQLインジェクション対策済み
 
 自動連番と投稿日時の付与
 
-5MBを超える画像はアップロード不可
+5MBを超える画像はJavaScriptで自動縮小
 
 1. AWS EC2 インスタンスの準備
 まず、アプリケーションをホストするEC2インスタンスを立ち上げます。
@@ -129,13 +129,11 @@ Nginxの設定ファイル用ディレクトリを作成し、default.conf を�
 Bash
 
 mkdir nginx
-# default.conf の内容は後述
 PHPコードを格納するpublicディレクトリを作成し、kadai.phpを配置します。
 
 Bash
 
 mkdir public
-# kadai.php の内容は後述
 4. アプリケーションとサーバーの設定
 nginx/default.conf と public/kadai.php に以下の内容を記述します。
 
@@ -163,10 +161,14 @@ public/kadai.php
 <details>
 <summary>クリックして kadai.php の全文を表示</summary>
 
+PHP
 
 <?php
 // データベース接続
 $dbh = new PDO('mysql:host=mysql;dbname=example_db', 'root', '');
+
+// アラートメッセージ用の変数を初期化
+$alert_message = null;
 
 // 新規投稿処理
 if (isset($_POST['body'])) {
@@ -218,12 +220,15 @@ if (isset($_POST['delete_id']) && isset($_POST['delete_password_check'])) {
         $delete_sth = $dbh->prepare("DELETE FROM bbs_entries WHERE id = :id");
         $delete_sth->execute([':id' => $delete_id]);
     } else {
-        echo "<script>alert('パスワードが違います。');</script>";
+        // パスワードが間違っていた場合、アラートメッセージを設定
+        $alert_message = 'パスワードが違います。';
     }
 
-    header("HTTP/1.1 302 Found");
-    header("Location: ./kadai.php");
-    return;
+    // リダイレクトはアラートメッセージがなければ実行
+    if ($alert_message === null) {
+        header("Location: ./kadai.php");
+        return;
+    }
 }
 
 // ページネーション設定
@@ -441,6 +446,12 @@ foreach ($all_ids as $index => $id) {
 </head>
 <body>
 
+<?php if ($alert_message): ?>
+<script>
+    alert('<?= htmlspecialchars($alert_message) ?>');
+</script>
+<?php endif; ?>
+
 <form method="POST" action="./kadai.php" enctype="multipart/form-data" id="uploadForm">
   <textarea name="body" required placeholder="ここに本文を入力してください" id="bodyTextarea"></textarea>
   <div style="margin: 1em 0;">
@@ -600,4 +611,3 @@ document.querySelectorAll('.entry-id').forEach(button => {
 });
 </script>
 </body>
-</html>
