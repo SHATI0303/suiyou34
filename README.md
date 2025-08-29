@@ -131,6 +131,8 @@ server {
 
 public/kadai.php
 <details> <summary>クリックして表示</summary>
+
+```php
 <?php
 // データベース接続
 $dbh = new PDO('mysql:host=mysql;dbname=example_db', 'root', '');
