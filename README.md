@@ -63,8 +63,9 @@ mkdir bulletin-board
 cd bulletin-board
 ```
 
-```bash
+
 docker-compose.yml
+```bash
 version: '3.8'
 
 services:
