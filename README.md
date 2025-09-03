@@ -32,28 +32,38 @@
 EC2 に接続後、以下を実行してください。
 
 # システムパッケージ更新
+```bash
 sudo yum update -y
+```
 
 # Docker インストール
+```bash
 sudo yum install docker -y
+```
 
 # Docker 起動 & 自動起動設定
+```bash
 sudo systemctl start docker
 sudo systemctl enable docker
+```
 
-# sudo なしで利用できるようにユーザーを追加
-sudo usermod -a -G docker ec2-user
 
 # Docker Compose インストール
+
+```bash
 sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" \
-  -o /usr/local/bin/docker-compose
+-o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
+```
 
 ## 3. Docker コンテナの定義と設定
 プロジェクトディレクトリ作成
+```bash
 mkdir bulletin-board
 cd bulletin-board
+```
 
+```bash
 docker-compose.yml
 version: '3.8'
 
@@ -91,8 +101,10 @@ services:
 
 volumes:
   mysql-data:
+```
 
 Dockerfile
+```bash
 FROM php:8.0-fpm
 RUN apt-get update && apt-get install -y \
     libonig-dev \
@@ -103,14 +115,18 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install pdo_mysql gd
+```
+
 
 ディレクトリ作成
+```bash
 mkdir nginx
 mkdir public
-
+```
 
 4. アプリケーションとサーバー設定
 nginx/default.conf
+```bash
 server {
     listen 80;
     server_name _;
@@ -129,6 +145,7 @@ server {
     }
 }
 
+```
 public/kadai.php
 <details> <summary>クリックして表示</summary>
 
