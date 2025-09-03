@@ -604,8 +604,9 @@ document.querySelectorAll('.entry-id').forEach(button => {
 ```
 
 </details>
-完了 🎉
+完了 
 
-docker compose up を実行すれば、掲示板サービスが起動します。
+docker compose up
+を実行すれば、掲示板サービスが起動します。
 
-http://<EC2のパブリックIP>/ にアクセスして動作を確認してください。
+http://<EC2のパブリックIP>/ にアクセス
